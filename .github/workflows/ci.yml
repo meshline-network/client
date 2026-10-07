@@ -1,0 +1,26 @@
+name: client
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore Meshline.Client.slnx
+      - run: dotnet build Meshline.Client.slnx -c Release --no-restore
+      - run: dotnet run --project tests/Meshline.Cli.Tests -c Release --no-build -- --minimum-expected-tests 42 --fail-skips on --report-xunit-trx --results-directory TestResults
+      - name: Built CLI smoke test
+        run: dotnet src/Meshline.Cli/bin/Release/net10.0/meshline.dll --help
+      - name: Linux credentials and signal acceptance
+        if: runner.os == 'Linux'
+        run: python3 scripts/Test-Linux.py src/Meshline.Cli/bin/Release/net10.0/meshline.dll

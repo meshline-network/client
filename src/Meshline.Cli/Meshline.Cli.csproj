@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RuntimeIdentifiers>win-x64;linux-x64</RuntimeIdentifiers>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>meshline</AssemblyName>
+    <RootNamespace>Meshline.Cli</RootNamespace>
+    <Version>0.1.0</Version>
+    <Description>Meshline command-line reference client</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Meshline.Sdk" Version="1.2.0" />
+    <PackageReference Include="System.CommandLine" Version="2.0.12" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
+    <PackageReference Include="Neo" Version="3.10.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Meshline.Cli.Tests" />
+    <None Update="config.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

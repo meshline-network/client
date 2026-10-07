@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Meshline.Cli/Meshline.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Meshline.Cli.Tests/Meshline.Cli.Tests.csproj" />
+  </Folder>
+</Solution>
