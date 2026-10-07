@@ -89,6 +89,7 @@ Previously unreadable messages are not guaranteed to become readable retroactive
 | Large histories | Unbounded latest views still scan snapshots; use explicit bounds for efficient pages of up to 10,000 items. Successive commands open new snapshots and do not guarantee complete remote history. |
 | Operations | No daemon log rotation; no Windows Service installation or automatic supervisor setup. |
 | Additional hardening | Broader fault/permission/interruption matrices and large-history performance need further validation. |
-| Availability of workflows | CI and Release definitions have been checked locally; successful hosted GitHub runs have not been established. |
+
+Hosted [CI and Release workflows](https://github.com/meshline-network/client/actions) have completed successfully, and [release downloads](https://github.com/meshline-network/client/releases/latest) are available. Their automated checks do not establish the pending live acceptance listed above.
 
 Report a problem with the application version, OS, command with secrets removed, exit code, structured error, and relevant diagnostics. Keep local environment evidence outside published user documentation.

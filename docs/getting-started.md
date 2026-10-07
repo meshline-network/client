@@ -6,7 +6,7 @@ This guide takes two participants from installation to their first direct messag
 
 ## Install a package
 
-Download the archive for your platform and `SHA256SUMS` from the same GitHub Release. In these examples, replace `0.1.0` with that release's version. If no release is available, [build from source](development.md#build-and-test).
+Download the archive for your platform and `SHA256SUMS` from the same [GitHub Release](https://github.com/meshline-network/client/releases/latest). In these examples, replace `0.1.0` with that release's version. To build the current source instead, follow [the build instructions](development.md#build-and-test).
 
 ### Windows PowerShell
 

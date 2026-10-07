@@ -10,7 +10,7 @@ The client is a **development preview**. It uses the published .NET SDK for sync
 
 ## Installation
 
-When a release is available, download the archive for your platform and `SHA256SUMS` from this repository's GitHub Releases page:
+Download the archive for your platform and `SHA256SUMS` from the [latest GitHub Release](https://github.com/meshline-network/client/releases/latest). The initial development-preview release is [v0.1.0](https://github.com/meshline-network/client/releases/tag/v0.1.0).
 
 | Platform | Archive |
 | --- | --- |
@@ -67,3 +67,10 @@ The [automation guide](docs/automation.md) defines output, exit codes, delivery 
 Linux builds and offline credential/signal checks have passed, but ordinary-user daemon socket lifecycle and the complete systemd service deployment still need live acceptance. Cross-Relay delivery and home-Relay migration also remain unverified without a second Relay.
 
 Account authority recovery does not restore deleted local history or guarantee immediate contact/key synchronization. See [known limitations](docs/troubleshooting.md#known-limitations) before relying on unattended operation.
+
+## Related resources
+
+- [Meshline website and developer resources](https://meshline.org/en/resources).
+- [Meshline SDKs](https://github.com/meshline-network/sdk) and the [.NET SDK guide](https://meshline.org/sdk/dotnet/index.html).
+- [Protocol specification](https://github.com/meshline-network/protocol) and [online reader](https://meshline.org/protocol/v1/en/index.html).
+- [Registry reference contracts](https://github.com/meshline-network/contracts).
