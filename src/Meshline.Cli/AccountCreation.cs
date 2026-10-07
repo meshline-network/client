@@ -27,7 +27,8 @@ internal static partial class Commands
         }
     };
 
-    static async Task CreateAccountAsync(Invocation invocation, Output output, CancellationToken token)
+    internal static async Task CreateAccountAsync(Invocation invocation, Output output, CancellationToken token,
+        Func<ProfileContext, Vault, CancellationToken, Task<IdentityDocument>>? createIdentity = null)
     {
         var app = await Configuration.LoadAsync(invocation.ConfigPath, token);
         var name = invocation.Profile ?? app.DefaultProfile;
@@ -74,7 +75,7 @@ internal static partial class Commands
             settings.ProtectedKey = await Secrets.CreateAsync(context, token, passphrase);
             using (var vault = await Secrets.OpenAsync(context, token, passphrase))
                 identity = imported is null
-                    ? await Identity.CreateAsync(context, vault, token)
+                    ? await (createIdentity ?? Identity.CreateAsync)(context, vault, token)
                     : await Identity.ImportPreparedAsync(context, vault, imported, token);
             await PrivateFiles.WriteAtomicAsync(context.ProfilePath, JsonSerializer.SerializeToUtf8Bytes(settings, Json.Pretty), false, token);
             var current = await Configuration.LoadAsync(invocation.ConfigPath, token);

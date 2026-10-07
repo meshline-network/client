@@ -19,7 +19,7 @@ A profile wrapping key is different from a NEP-6 wallet password. `--password-fi
 
 Generate a wrapping key using `secrets generate-key --out PATH` or create/import with `--protection file --key-file PATH --generate-key`. The file contains binary key material, not a password or base64 text. Existing files are never overwritten. Keep it outside the new profile directory.
 
-Credential checks reject invalid sizes, symbolic links, and overly broad permissions. On Windows, access is restricted to the current user, SYSTEM, and Administrators; on Linux, group/other access is not allowed for ordinary private credential files. Do not resolve permission errors by making secrets world-readable.
+Credential checks reject invalid sizes, symbolic links, and overly broad permissions. On Windows, access is restricted to the current user, SYSTEM, and Administrators; on Linux, group/other access is not allowed for ordinary private credential files. Linux native mode also accepts systemd's POSIX ACL granting the service user access: the mode's group bits represent the ACL mask, so the CLI checks the effective ACL permissions and rejects access granted to other users or groups. Do not resolve permission errors by making secrets world-readable.
 
 Account create/import prepares identity, protected key, and configuration in a private temporary profile, then publishes the directory atomically. Import verifies the wallet and selected account first. If creation fails after generating an external key file, that file can remain; inspect it before retrying, and reuse it without `--generate-key` when appropriate. An existing profile directory is never replaced.
 

@@ -108,17 +108,19 @@ public sealed class AccountCreationTests
             ["network"] = fixture.Context.Settings.Network, ["rpc"] = fixture.Context.Settings.RpcUrl,
             ["protection"] = "file", ["key-file"] = fixture.Context.Settings.Protection.KeyFile!
         }, fixture.Context.ConfigPath, "bound", true, 0);
-        var creating = Task.Run(() => Commands.ExecuteAsync(invocation, new Output(TextWriter.Null, TextWriter.Null, true), canceled.Token), Token);
-        using var observationDeadline = CancellationTokenSource.CreateLinkedTokenSource(Token);
-        observationDeadline.CancelAfter(TimeSpan.FromSeconds(15));
-        while (!Directory.Exists(root) || !Directory.EnumerateDirectories(root, ".pending-*").Any())
+        var reachedIdentity = false;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Commands.CreateAccountAsync(invocation,
+            new Output(TextWriter.Null, TextWriter.Null, true), canceled.Token, async (context, vault, token) =>
         {
-            Assert.False(creating.IsCompleted, "Creation finished before its staging directory could be observed.");
-            await Task.Delay(1, observationDeadline.Token);
-        }
-        Assert.False(Directory.Exists(Path.Combine(root, "bound")));
-        canceled.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => creating);
+            var identity = await Identity.CreateAsync(context, vault, token);
+            Assert.True(File.Exists(context.IdentityPath));
+            Assert.Single(Directory.EnumerateDirectories(root, ".pending-*"));
+            Assert.False(Directory.Exists(Path.Combine(root, "bound")));
+            reachedIdentity = true;
+            canceled.Cancel();
+            return identity;
+        }));
+        Assert.True(reachedIdentity);
         Assert.False(Directory.Exists(Path.Combine(root, "bound")));
         Assert.Empty(Directory.EnumerateDirectories(root, ".pending-*"));
     }

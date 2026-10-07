@@ -1,3 +1,6 @@
+using System.Buffers.Binary;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
@@ -53,16 +56,73 @@ internal static class PrivateFiles
         new FileInfo(path).SetAccessControl(security);
     }
 
-    public static void VerifySecretFile(string path)
+    public static void VerifySecretFile(string path, bool allowCurrentUserAcl = false)
     {
         var file = new FileInfo(path);
         if (!file.Exists) throw new CliException("credential_missing", "The configured credential file does not exist.", Exit.Credentials);
         if (file.LinkTarget is not null || (file.Attributes & FileAttributes.ReparsePoint) != 0)
             throw new CliException("credential_link", "Credential files must be regular files, not symbolic links.", Exit.Credentials);
         if (OperatingSystem.IsWindows()) VerifyWindowsFilePermissions(file);
-        else if ((File.GetUnixFileMode(path) & (UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute)) != 0)
+        else if ((File.GetUnixFileMode(path) & (UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute)) != 0
+            && !(allowCurrentUserAcl && OperatingSystem.IsLinux() && HasPrivateLinuxAcl(path)))
             throw new CliException("credential_permissions", "Credential file must be accessible only to its owner (for example mode 0600).", Exit.Credentials);
     }
+
+    [SupportedOSPlatform("linux")]
+    static bool HasPrivateLinuxAcl(string path)
+    {
+        // systemd grants the service UID access with a POSIX ACL. In st_mode,
+        // the group bits then describe the ACL mask, not the owning group's access.
+        var bytes = new byte[65536]; // Linux's maximum extended attribute value size.
+        var length = GetXattr(path, "system.posix_acl_access", bytes, (nuint)bytes.Length);
+        if (length < 0)
+        {
+            var error = Marshal.GetLastPInvokeError();
+            if (error is 61 or 95) return false; // ENODATA or EOPNOTSUPP: no usable ACL.
+            throw new IOException("Could not inspect the credential's POSIX ACL.", new Win32Exception(error));
+        }
+        return IsPrivateLinuxAcl(bytes.AsSpan(0, checked((int)length)), GetEffectiveUserId());
+    }
+
+    internal static bool IsPrivateLinuxAcl(ReadOnlySpan<byte> acl, uint currentUser)
+    {
+        if (acl.Length < 28 || (acl.Length - 4) % 8 != 0 || BinaryPrimitives.ReadUInt32LittleEndian(acl) != 2) return false;
+        var mask = 7;
+        for (var offset = 4; offset < acl.Length; offset += 8)
+            if (BinaryPrimitives.ReadUInt16LittleEndian(acl[offset..]) == 16)
+                mask = BinaryPrimitives.ReadUInt16LittleEndian(acl[(offset + 2)..]);
+        for (var offset = 4; offset < acl.Length; offset += 8)
+        {
+            var tag = BinaryPrimitives.ReadUInt16LittleEndian(acl[offset..]);
+            var permissions = BinaryPrimitives.ReadUInt16LittleEndian(acl[(offset + 2)..]);
+            var id = BinaryPrimitives.ReadUInt32LittleEndian(acl[(offset + 4)..]);
+            if ((permissions & ~7) != 0) return false;
+            switch (tag)
+            {
+                case 1:
+                case 16: break; // Owner and mask; the kernel validates ACL structure.
+                case 2:
+                    if (id != currentUser && id != 0 && (permissions & mask) != 0) return false;
+                    break;
+                case 4:
+                case 8:
+                    if ((permissions & mask) != 0) return false;
+                    break;
+                case 32:
+                    if (permissions != 0) return false;
+                    break;
+                default: return false;
+            }
+        }
+        return true;
+    }
+
+    [DllImport("libc", EntryPoint = "getxattr", SetLastError = true)]
+    static extern nint GetXattr([MarshalAs(UnmanagedType.LPUTF8Str)] string path,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string name, [Out] byte[] value, nuint size);
+
+    [DllImport("libc", EntryPoint = "geteuid")]
+    static extern uint GetEffectiveUserId();
 
     [SupportedOSPlatform("windows")]
     static void VerifyWindowsFilePermissions(FileInfo file)

@@ -195,7 +195,7 @@ internal static class Secrets
             path = Path.Combine(directory, name);
         }
         else throw new CliException("native_unavailable", "Native protection is supported on Windows and Linux/systemd.", Exit.Credentials);
-        PrivateFiles.VerifySecretFile(path);
+        PrivateFiles.VerifySecretFile(path, allowCurrentUserAcl: protection.Mode == "native");
         if (new FileInfo(path).Length != 32) throw new CliException("key_format", "Credential must contain exactly 32 random binary bytes.", Exit.Credentials);
         return await File.ReadAllBytesAsync(path, token);
     }
