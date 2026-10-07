@@ -4,7 +4,7 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>meshline</AssemblyName>
     <RootNamespace>Meshline.Cli</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Description>Meshline command-line reference client</Description>
   </PropertyGroup>
   <ItemGroup>

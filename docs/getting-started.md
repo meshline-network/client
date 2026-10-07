@@ -6,14 +6,14 @@ This guide takes two participants from installation to their first direct messag
 
 ## Install a package
 
-Download the archive for your platform and `SHA256SUMS` from the same [GitHub Release](https://github.com/meshline-network/client/releases/latest). In these examples, replace `0.1.0` with that release's version. To build the current source instead, follow [the build instructions](development.md#build-and-test).
+Download the archive for your platform and `SHA256SUMS` from the same [GitHub Release](https://github.com/meshline-network/client/releases/latest). In these examples, replace `0.2.0` with that release's version. To build the current source instead, follow [the build instructions](development.md#build-and-test).
 
 ### Windows PowerShell
 
 Run in the download directory:
 
 ```powershell
-$version = "0.1.0"
+$version = "0.2.0"
 $archive = "meshline-$version-win-x64.zip"
 $expected = ((Get-Content .\SHA256SUMS | Where-Object { $_.EndsWith("  $archive") }) -split '\s+')[0]
 $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
@@ -31,7 +31,7 @@ The `PATH` change applies to this PowerShell session. Choose a writable extracti
 Run in the download directory:
 
 ```sh
-version=0.1.0
+version=0.2.0
 sha256sum --ignore-missing -c SHA256SUMS
 mkdir meshline
 tar -xzf "meshline-$version-linux-x64.tar.gz" -C meshline
