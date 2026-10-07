@@ -16,6 +16,7 @@ internal static partial class Commands
         .. SessionCatalog,
         .. GroupCatalog,
         .. ChannelCatalog,
+        new("interactive", "Keep one profile unlocked and execute commands from stdin; cancel interrupts a command, exit closes the session.", [], [], []),
         new("daemon run", "Run a foreground SDK session until canceled or stopped.", [], ["unlock-stdin"], []),
         new("daemon start", "Start a background session, unlocking once through a private child pipe.", [], [], []),
         new("daemon status", "Inspect the local daemon without opening the SDK database.", [], [], []),
@@ -48,13 +49,7 @@ internal static partial class Commands
         if (invocation.Command.StartsWith("daemon ", StringComparison.Ordinal)) return await Daemon.ExecuteAsync(invocation, context, output, token);
         if (invocation.Command == "account show")
         {
-            var identity = await Identity.LoadAsync(context, token);
-            await output.ResultAsync(CommandResult.Success(new
-            {
-                identity.AccountId, identity.Address, identity.PublicKey, profile = context.Name,
-                profilePath = context.ProfilePath, network = context.Settings.Network, rpcUrl = context.Settings.RpcUrl,
-                dataDirectory = context.DataDirectory, protection = context.Settings.Protection
-            }));
+            await ShowAccountAsync(context, output, token);
             return Exit.Success;
         }
         if (invocation.Command is "account export" or "secrets rewrap")
@@ -79,6 +74,40 @@ internal static partial class Commands
             return Exit.Success;
         }
         return await ExecuteWithSessionAsync(invocation, context, output, token);
+    }
+
+    internal static async Task<int> ExecuteInteractiveAsync(Invocation invocation, RuntimeSession session, Output output, CancellationToken token)
+    {
+        if (!Interactive.Supports(invocation.Command))
+            throw new CliException("interactive_command", "Exit interactive mode before running this command.", Exit.Usage);
+        switch (invocation.Command)
+        {
+            case "config show":
+            case "account list":
+            case "doctor":
+                return await ExecuteAsync(invocation, output, token); // Read-only, no session or IPC.
+            case "account show":
+                await ShowAccountAsync(session.Context, output, token);
+                return Exit.Success;
+            case "relays list":
+                var items = new List<object>();
+                await foreach (var relay in session.Registry.GetRelaysAsync(token)) items.Add(relay);
+                await output.ResultAsync(CommandResult.Success(new { items }));
+                return Exit.Success;
+            default:
+                return await ExecuteSessionAsync(invocation, session, output, token);
+        }
+    }
+
+    static async Task ShowAccountAsync(ProfileContext context, Output output, CancellationToken token)
+    {
+        var identity = await Identity.LoadAsync(context, token);
+        await output.ResultAsync(CommandResult.Success(new
+        {
+            identity.AccountId, identity.Address, identity.PublicKey, profile = context.Name,
+            profilePath = context.ProfilePath, network = context.Settings.Network, rpcUrl = context.Settings.RpcUrl,
+            dataDirectory = context.DataDirectory, protection = context.Settings.Protection
+        }));
     }
 
     static ProtectionConfiguration Protection(Invocation invocation) => new(invocation.Require("protection"),

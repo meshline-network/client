@@ -19,6 +19,31 @@ The watcher occupies its terminal until canceled. Stopping a watcher attached to
 
 `account show`, `account list`, `config show`, and local diagnostics do not need an unlocked SDK session. `relays list` queries the configured Registry separately. Account establishment, recovery, export, and key rewrap require stopping the profile's daemon first.
 
+## Interactive sessions
+
+Use one foreground process when a terminal or agent can keep stdin/stdout open:
+
+```sh
+meshline interactive --profile agent --timeout 180
+```
+
+After readiness, enter one command at a time (without `meshline`):
+
+```text
+status
+conversations list
+watch
+cancel
+messages send --to ACCOUNT_ID --text "Hello from the interactive session"
+exit
+```
+
+Wait for each command to finish before entering the next; `cancel` is accepted while a command is running. Ctrl+C has the same effect. Empty Enter does not stop `watch`. The selected account stays unlocked and synchronized until `exit`, EOF, or process termination. Startup requires an established account with usable credentials; another daemon/session over that profile must be stopped first. Other profiles may run independently.
+
+This mode creates no daemon listener and uses no CLI-to-daemon connection. An independent CLI process cannot attach to it and receives `profile_busy` for operations needing that same session. Reuse the original stdin/stdout handles instead. For agent output framing and cancellation, see [interactive agent process](automation.md#interactive-agent-process).
+
+The entry timeout covers startup and ordinary commands, not the process lifetime. `watch --timeout 30` explicitly limits one watch. Successful startup does not mean synchronization is complete. Before backup, account/key management, or replacement, exit and wait for process termination so the exclusive lock and SQLite handles have been released.
+
 ## Foreground and background execution
 
 | Command | Process behavior |
@@ -27,6 +52,7 @@ The watcher occupies its terminal until canceled. Stopping a watcher attached to
 | `daemon start` | Unlocks the profile, starts a child process, and returns after readiness. |
 | `daemon status` | Checks local IPC reachability without opening the database. |
 | `daemon stop` | Requests graceful shutdown; wait for process exit before working with its files. |
+| `interactive` | Keeps one foreground session and reads commands from stdin without IPC. |
 
 Readiness does not guarantee completion of history synchronization. Use `status` for the daemon's runtime observations, or await `account sync`, `groups sync ID`, or `channels sync ID` for a fresh pass. Without a daemon, these commands perform one pass and exit without starting background workers. A stopped daemon means no continued background work unless another command/session is running.
 

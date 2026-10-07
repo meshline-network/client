@@ -6,6 +6,8 @@ This repository provides clients for Meshline. Its first client, `meshline`, is 
 
 The CLI manages accounts, devices, contacts, encrypted direct and group messages, public channels, and local conversation history. An optional daemon keeps an account connected while other CLI processes issue commands. Each local profile belongs to one account.
 
+`meshline interactive --profile agent --json` keeps a profile connected in one foreground process and accepts commands through stdin, without daemon IPC. See [interactive sessions](docs/operations.md#interactive-sessions).
+
 The client is a **development preview**. It uses the published .NET SDK for synchronization, conversation state, message history, read positions, and retained send outcomes.
 
 ## Installation

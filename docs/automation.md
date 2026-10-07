@@ -18,7 +18,7 @@ A failure has this envelope:
 {"schemaVersion":1,"ok":false,"data":null,"error":{"code":"profile_missing","message":"Profile does not exist.","details":null}}
 ```
 
-`data` depends on the command and may be null. `error.details` may contain a partial report or the last known operation state. Parse stdout as data and collect stderr separately for diagnostics; do not merge the two streams. `--help`, `--version`, and command-group help are textual interfaces, not JSON results. Long-lived `daemon run` writes a readiness result and then remains running.
+`data` depends on the command and may be null. `error.details` may contain a partial report or the last known operation state. Parse stdout as data and collect stderr separately for diagnostics; do not merge the two streams. Standalone `--help`, `--version`, and command-group help are textual interfaces, not JSON results. Interactive JSON mode wraps inner help in `data.help`. Long-lived `daemon run` writes a readiness result and then remains running.
 
 CLI envelopes and SDK client models use camelCase fields. Embedded protocol documents use their protocol snake_case and base64url encoding; do not rename or re-encode their fields. Examples marked as placeholders are not signed protocol documents.
 
@@ -63,6 +63,32 @@ Timeout/cancellation codes distinguish the source:
 | `canceled` | The caller canceled the command. | 130 |
 
 The optional request details are `operation` (string) and `timeoutSeconds` (number). Do not infer whether a submitted write executed from any of these errors; query its status before retrying.
+
+## Interactive agent process
+
+Start `meshline interactive --config PATH --profile agent --json --timeout 180` with stdin/stdout/stderr pipes. Keep the process and pipes open, and continuously drain stdout and stderr separately. File/native credentials are required with redirected stdin. The process unlocks and starts the selected profile once, then shares that SDK session across commands without daemon IPC.
+
+Use UTF-8 for redirected input and output on both Windows and Linux; do not use the Windows console's legacy code page for pipe data.
+
+Wait for readiness:
+
+```json
+{"schemaVersion":1,"type":"interactive.ready","data":{"profile":"agent","synchronization":"background-no-completion-barrier"}}
+```
+
+Write a command line followed by a newline and flush stdin, for example `conversations list --unread`. Read its ordinary result, then wait for:
+
+```json
+{"schemaVersion":1,"type":"interactive.command.completed","data":{"sequence":1,"exitCode":0}}
+```
+
+Only then send the next ordinary command. `sequence` increments for each accepted command, including invalid commands and help; its `exitCode` is the command's logical exit code, not the process exit code. Control lines and busy rejections are not commands and do not increment it. The JSON result envelope and watch event schemas stay unchanged. `interactive_busy` on stderr means the input was discarded, not queued.
+
+To receive events, write `watch\n` and read `watch.ready` plus subsequent event lines. To stop watching, write `cancel\n`, flush, and wait for the canceled result and the corresponding completion event (normally exitCode 130). The SDK continues synchronizing, and the next command can inspect current state. `cancel` also interrupts ordinary commands; a canceled send wait can instead return exitCode 6 with retained send status. Empty lines do not cancel anything. Events remain live-only without replay.
+
+Write `exit\n` or close stdin to shut down, cancel any active command, release the session, and exit 0 after successful cleanup. Linux SIGTERM shuts down with exit 130; Ctrl+C cancels only the current command once ready. Do not batch commands or close stdin immediately after submitting a command: EOF requests shutdown, not queue draining. The entry timeout bounds startup and sets the ordinary command default; it does not kill the session, and `watch` remains unlimited unless it has its own `--timeout`.
+
+Keep the entry profile/configuration/JSON mode fixed. Run account setup, recovery, export, key management, and daemon commands outside this mode. Startup and I/O failures terminate the process; ordinary command failures leave it usable. Readiness is not a history-synchronization barrier. Agent-host suspension, child-process survival, and retained stdin access require acceptance in the actual agent environment.
 
 ## Synchronization and local queries
 

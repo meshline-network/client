@@ -17,6 +17,7 @@
 - [Groups](#groups)
 - [Channels](#channels)
 - [Daemon and events](#daemon-and-events)
+- [Interactive sessions](#interactive-sessions)
 
 ## Conventions and shared options
 
@@ -31,6 +32,8 @@ Usage lines show required values in uppercase, optional parts in brackets, and a
 | `--help` | Show textual help. Root `--version` shows the application version. |
 
 All command-specific results below describe the `data` field of the [result envelope](automation.md#output-contract). Successful void SDK operations return a receipt identifying the action, not an additional delivery or synchronization guarantee.
+
+For `interactive`, the entry `--timeout` bounds startup and supplies the default for ordinary inner commands, not the session lifetime. Inner `watch` defaults to no deadline. See [interactive sessions](#interactive-sessions).
 
 Unless stated otherwise, SDK commands require an existing profile and an unlockable credential, or a daemon already holding that profile's session. A temporary SDK session takes the profile's exclusive lock; commands use an existing daemon automatically. Network operations require a usable authorized device/route, except account establishment and recovery, which create or restore authority. Local queries need no live Relay connection and do not refresh remote state. See [operations](operations.md) for lifecycle details.
 
@@ -786,6 +789,34 @@ Usage: `meshline channels history ID [--relay ID] [--limit N] [--cursor VALUE]`
 Loads a page of historical posts from the Relay into the SDK. Defaults to limit 50 and no cursor; returns `{items,nextCursor}`. This is a remote history operation, unlike `channels posts`.
 
 Example: `meshline channels history "CHANNEL_ID" --relay "RELAY_ID" --limit 50 --json`
+
+## Interactive sessions
+
+### interactive
+
+Usage: `meshline interactive [--config PATH] [--profile NAME] [--json] [--timeout SECONDS]`
+
+Example: `meshline interactive --profile agent --json`
+
+Unlocks one existing, established profile, starts its SDK background workers, and reads commands from stdin in the same process. It holds the profile's exclusive session lock and never attaches to or exposes daemon IPC. A busy profile returns `profile_busy`. Startup failures release the session and exit; no readiness event is emitted. Complete account establishment/recovery before entering this mode.
+
+Enter commands without the `meshline` prefix. `help`, `help messages send`, and ordinary `--help` are supported. Only one command executes at a time. While it runs, only `cancel` and `exit` control lines are accepted; other nonempty input produces an `interactive_busy` diagnostic on stderr and is neither executed nor queued. Empty lines are ignored. The inner command parser uses the existing options and quotation rules; it does not run a shell or expand variables, pipelines, or redirections. Paths remain relative to the process working directory.
+
+The entry configuration, profile, and JSON mode are fixed: inner `--config`, `--profile`, and `--json` options are unavailable. Account creation, import, establishment, recovery, export, all `secrets` commands, `daemon` commands, and nested `interactive` are unavailable. Other SDK commands and read-only `account show`, `account list`, `config show`, `doctor`, and `relays list` are supported.
+
+| Input | Behavior |
+| --- | --- |
+| `cancel` or Ctrl+C | Cancels the active command, waits for its cleanup, and returns to command input. Idle cancellation keeps the session open. |
+| `watch` | Streams existing SDK events until canceled, timed out, or failed. Background synchronization also runs outside `watch`. |
+| Empty line | Ignored, including during `watch`. |
+| `exit` or stdin EOF | Cancels the active command, disposes the SDK session, and exits 0 after successful cleanup. |
+| SIGTERM on Linux | Shuts down the whole session and exits 130 after cleanup. |
+
+Ordinary commands default to 60 seconds or the entry `--timeout`; an inner `--timeout` overrides that command. Inner `watch` defaults to 0 even when an entry timeout was supplied. No command deadline bounds the overall interactive lifetime. Per-command errors/timeouts do not terminate the session. I/O channel failures do.
+
+`--json` keeps stdout as NDJSON, including help as a normal result with `data.help`. The process emits `interactive.ready` once and `interactive.command.completed` with `data.sequence` (starting at 1) and `data.exitCode` after every accepted command, including failed commands and help. Control lines, empty lines, and busy rejections do not receive a sequence. See the [agent stream contract](automation.md#interactive-agent-process).
+
+Prompts such as `meshline[agent]> ` appear on stderr only for terminal input without `--json`. Passphrase unlocking requires a terminal; redirected input uses file/native credentials. Canceling a send wait does not cancel the queued/submitted message. Preserve its returned status and message ID before retrying.
 
 ## Daemon and events
 

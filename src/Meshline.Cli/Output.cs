@@ -44,41 +44,36 @@ internal sealed record CommandResult(int SchemaVersion, bool Ok, object? Data, E
 internal sealed class Output(TextWriter stdout, TextWriter stderr, bool json)
 {
     readonly SemaphoreSlim gate = new(1);
+    readonly TaskCompletionSource<Exception> failure = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public bool IsJson { get; } = json;
+    public Task<Exception> Failure => failure.Task;
 
-    public async Task ForwardAsync(string line, bool diagnostic)
+    async Task WriteAsync(Func<Task> write)
     {
         await gate.WaitAsync();
-        try { var writer = diagnostic ? stderr : stdout; await writer.WriteLineAsync(line); await writer.FlushAsync(); }
+        try { await write(); }
+        catch (Exception error) { failure.TrySetResult(error); throw; }
         finally { gate.Release(); }
     }
 
-    public async Task ResultAsync(CommandResult result)
-    {
-        await gate.WaitAsync();
-        try
+    public Task ForwardAsync(string line, bool diagnostic) => WriteAsync(async () =>
+    { var writer = diagnostic ? stderr : stdout; await writer.WriteLineAsync(line); await writer.FlushAsync(); });
+
+    public Task ResultAsync(CommandResult result) => WriteAsync(async () =>
         {
             await stdout.WriteLineAsync(JsonSerializer.Serialize(result, IsJson ? Json.Options : Json.Pretty));
             await stdout.FlushAsync();
-        }
-        finally { gate.Release(); }
-    }
+        });
 
-    public async Task EventAsync(string type, object? data)
-    {
-        await gate.WaitAsync();
-        try
+    public Task EventAsync(string type, object? data) => WriteAsync(async () =>
         {
             await stdout.WriteLineAsync(JsonSerializer.Serialize(new { schemaVersion = 1, type, data }, Json.Options));
             await stdout.FlushAsync();
-        }
-        finally { gate.Release(); }
-    }
+        });
 
-    public async Task DiagnosticAsync(string code, string message)
-    {
-        await gate.WaitAsync();
-        try { await stderr.WriteLineAsync(JsonSerializer.Serialize(new { code, message }, Json.Options)); }
-        finally { gate.Release(); }
-    }
+    public Task DiagnosticAsync(string code, string message) => WriteAsync(async () =>
+    { await stderr.WriteLineAsync(JsonSerializer.Serialize(new { code, message }, Json.Options)); await stderr.FlushAsync(); });
+
+    public Task PromptAsync(string profile) => WriteAsync(async () =>
+    { await stderr.WriteAsync($"meshline[{profile}]> "); await stderr.FlushAsync(); });
 }

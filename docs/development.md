@@ -16,6 +16,8 @@ The repository currently contains the Meshline CLI and leaves room for other cli
 
 Command catalogs declare paths and options; execution code supplies several runtime-required checks, mutually exclusive choices, and defaults. Keep [commands](commands.md) aligned with both. `Output` defines the result envelope; protocol converters preserve protocol-specific encoding within it. `RuntimeSession` owns the SDK, vault, connections, diagnostics, and exclusive profile lock. `Daemon` forwards CLI invocations over same-user IPC.
 
+`CliParser` builds the shared command tree. `Interactive` owns one foreground SDK session, a single stdin reader, and separate command/session cancellation. Its inner parser disables the library's process-termination handler so Ctrl+C cancels a command without ending the session. Test stream framing and cancellation through the loop, shared SDK queries through a real local session, and actual process signals/live Relay behavior through acceptance.
+
 ## Build and test
 
 Install the .NET 10 SDK. From the repository root, these commands work in PowerShell and Linux shells:
@@ -23,7 +25,7 @@ Install the .NET 10 SDK. From the repository root, these commands work in PowerS
 ```sh
 dotnet restore Meshline.Client.slnx
 dotnet build Meshline.Client.slnx -c Release --no-restore
-dotnet run --project tests/Meshline.Cli.Tests -c Release --no-build -- --minimum-expected-tests 42 --fail-skips on --report-xunit-trx --results-directory TestResults
+dotnet run --project tests/Meshline.Cli.Tests -c Release --no-build -- --minimum-expected-tests 83 --fail-skips on --report-xunit-trx --results-directory TestResults
 dotnet src/Meshline.Cli/bin/Release/net10.0/meshline.dll --help
 ```
 
@@ -38,6 +40,16 @@ dotnet run --project src/Meshline.Cli -- --help
 The bundled configuration is copied to build outputs. With `dotnet run`, an omitted `--config` resolves beside the built application. Use a copied configuration and explicit path for persistent development accounts so rebuilding does not blur the boundary between runtime data and source outputs.
 
 ## Scripts
+
+### Test-Interactive.py
+
+Opt-in live acceptance for Windows or Linux, accepting a native executable or a framework-dependent DLL. It creates two fresh accounts, publishes device/route state, grants contact access, and sends a test message between them. Use an unused private work directory and a Relay/network you intend to test; it does not reuse existing accounts or send blockchain transactions.
+
+```sh
+python scripts/Test-Interactive.py PATH_TO_BINARY --network NETWORK --rpc RPC_URL --relay RELAY_ID --work-directory NEW_PRIVATE_DIRECTORY
+```
+
+The retained report covers session reuse without a credential file, NDJSON help/errors, direct-message delivery and watch receipt, busy input, cancellation, command deadlines, EOF/exit cleanup, and (on Linux) SIGINT/SIGTERM. This verifies the CLI on that host, not survival or tool wake-up in a separate agent environment.
 
 ### Publish.ps1
 

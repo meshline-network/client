@@ -29,65 +29,40 @@ internal static class CliApplication
         using var terminate = OperatingSystem.IsLinux()
             ? PosixSignalRegistration.Create(PosixSignal.SIGTERM, context => { context.Cancel = true; cancellation.Cancel(); })
             : null;
-        ConsoleCancelEventHandler cancel = (_, e) => { e.Cancel = true; cancellation.Cancel(); };
+        Action interrupt = cancellation.Cancel;
+        ConsoleCancelEventHandler cancel = (_, e) => { e.Cancel = true; Volatile.Read(ref interrupt)(); };
         Console.CancelKeyPress += cancel;
         try
         {
-            var root = new RootCommand("Meshline reference client. Account, contacts, conversations, groups and channels.");
-            var config = new Option<string>("--config") { Description = "Application configuration JSON path; defaults to config.json next to the application.", Recursive = true, DefaultValueFactory = _ => Configuration.DefaultPath };
-            var profile = new Option<string>("--profile") { Description = "Local account profile; defaults to the application's defaultProfile. For account create/import, names a new profile and must not already exist.", Recursive = true };
-            var jsonOption = new Option<bool>("--json") { Description = "Write structured JSON results (NDJSON for watch).", Recursive = true };
-            var timeout = new Option<double>("--timeout") { Description = "Operation deadline in seconds; 0 disables it (watch defaults to no deadline).", Recursive = true, DefaultValueFactory = _ => 60 };
-            root.Options.Add(config); root.Options.Add(profile); root.Options.Add(jsonOption); root.Options.Add(timeout);
-            var nodes = new Dictionary<string, Command> { [""] = root };
-            foreach (var spec in Commands.Catalog)
+            var parsed = CliParser.Parse(args, async (invocation, token) =>
             {
-                var parts = spec.Path.Split(' ');
-                var path = "";
-                var node = root as Command;
-                foreach (var part in parts)
-                {
-                    var parent = node;
-                    path = path.Length == 0 ? part : path + " " + part;
-                    if (!nodes.TryGetValue(path, out node))
-                    {
-                        node = new Command(part, path == spec.Path ? spec.Description : $"Manage {part}.");
-                        nodes[path] = node;
-                        parent.Subcommands.Add(node);
-                    }
-                }
-                var options = spec.Options.ToDictionary(name => name, name => new Option<string>("--" + name)
-                {
-                    Description = spec.OptionDescriptions.GetValueOrDefault(name) ?? name.Replace('-', ' '),
-                    Required = spec.RequiredOptions.Contains(name)
-                });
-                var flags = spec.Flags.ToDictionary(name => name, name => new Option<bool>("--" + name) { Description = spec.OptionDescriptions.GetValueOrDefault(name) ?? name.Replace('-', ' ') });
-                var arguments = spec.Arguments.ToDictionary(name => name, name => new Argument<string>(name));
-                foreach (var option in options.Values) node.Options.Add(option);
-                foreach (var flag in flags.Values) node.Options.Add(flag);
-                foreach (var argument in arguments.Values) node.Arguments.Add(argument);
-                node.SetAction(async (parsed, token) =>
-                {
-                    var values = new Dictionary<string, string>(StringComparer.Ordinal);
-                    foreach (var (name, option) in options) if (parsed.GetValue(option) is { } value) values[name] = value;
-                    foreach (var (name, flag) in flags) if (parsed.GetValue(flag)) values[name] = "true";
-                    foreach (var (name, argument) in arguments) if (parsed.GetValue(argument) is { } value) values[name] = value;
-                    var seconds = parsed.GetValue(timeout);
-                    var explicitTimeout = args.Any(a => a == "--timeout" || a.StartsWith("--timeout=", StringComparison.Ordinal));
-                    if (!explicitTimeout && spec.Path is "watch" or "daemon run") seconds = 0;
-                    if (seconds < 0 || !double.IsFinite(seconds) || seconds > 86400) throw new CliException("invalid_timeout", "Timeout must be between 0 and 86400 seconds.", Exit.Usage);
-                    var invocation = new Invocation(spec.Path, values, Path.GetFullPath(parsed.GetValue(config)!), parsed.GetValue(profile)!, parsed.GetValue(jsonOption), seconds);
-                    using var caller = CancellationTokenSource.CreateLinkedTokenSource(token, cancellation.Token);
-                    return await RunOperationAsync(ct => Commands.ExecuteAsync(invocation, output, ct), seconds, caller.Token);
-                });
-            }
-            var parsed = root.Parse(args);
+                using var caller = CancellationTokenSource.CreateLinkedTokenSource(token, cancellation.Token);
+                if (invocation.Command == "interactive")
+                    return await Interactive.RunAsync(invocation, output, Console.In, caller.Token,
+                        handler => Volatile.Write(ref interrupt, handler ?? cancellation.Cancel));
+                return await RunOperationAsync(ct => Commands.ExecuteAsync(invocation, output, ct), invocation.TimeoutSeconds, caller.Token);
+            });
+
             if (parsed.Errors.Count > 0)
                 throw new CliException("usage", string.Join(" ", parsed.Errors.Select(error => error.Message)), Exit.Usage);
-            return await parsed.InvokeAsync(new InvocationConfiguration { Output = stdout, Error = stderr, EnableDefaultExceptionHandler = false }, cancellation.Token);
+            return await parsed.InvokeAsync(new InvocationConfiguration
+            {
+                Output = stdout, Error = stderr, EnableDefaultExceptionHandler = false,
+                // Interactive owns Ctrl+C routing. The parser's default handler cancels the
+                // entire invocation and can return before session cleanup completes.
+                ProcessTerminationTimeout = parsed.CommandResult.Command.Name == "interactive" ? null : TimeSpan.FromSeconds(2)
+            }, cancellation.Token);
         }
         catch (Exception exception)
         {
+            if (output.Failure.IsCompleted)
+            {
+                // stdout may be broken while stderr is still usable. A failed output channel
+                // must terminate the session instead of being reported as a recoverable command.
+                try { await stderr.WriteLineAsync(JsonSerializer.Serialize(new { code = "output_error", message = exception.Message }, Json.Options)); }
+                catch (Exception writeError) when (writeError is IOException or ObjectDisposedException) { }
+                return Exit.Failure;
+            }
             var error = MapError(exception);
             await output.ResultAsync(CommandResult.Failure(error));
             return error.ExitCode;
@@ -95,11 +70,11 @@ internal static class CliApplication
         finally { Console.CancelKeyPress -= cancel; }
     }
 
-    internal static async Task<int> RunOperationAsync(Func<CancellationToken, Task<int>> action, double seconds, CancellationToken cancellationToken)
+    internal static async Task<int> RunOperationAsync(Func<CancellationToken, Task<int>> action, double seconds, CancellationToken cancellationToken, double graceSeconds = 2)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         // Allow IPC to return its structured timeout result before closing the client transport.
-        if (seconds > 0) deadline.CancelAfter(TimeSpan.FromSeconds(seconds + 2));
+        if (seconds > 0) deadline.CancelAfter(TimeSpan.FromSeconds(seconds + graceSeconds));
         try { return await action(deadline.Token); }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         { throw new CliException("operation_timeout", "The operation deadline elapsed. A submitted write may still complete; inspect its status before retrying.", Exit.Pending); }
