@@ -196,7 +196,9 @@ Example: `meshline devices list --out ./device-state.json --json`
 
 Usage: `meshline devices renew [--days N]`
 
-Renews this device's authorization and asks the SDK to publish device state to the home Relay. `--days` defaults to 365, range 1–3650. Returns `{device,publication}`; a staged publication is not yet proof of authoritative remote state.
+Renews this device's authorization and asks the SDK to publish device state to the home Relay. `--days` defaults to 365, range 1–720. The device ID, keys, and history remain unchanged.
+
+An accepted publication returns `{device,publication}`. A staged publication returns `device_publication_pending` (exit 6) with the same object in `error.details`. After a staged or uncertain publication, stop background sessions and run `account establish` to reconcile saved state before attempting another renewal. A locally renewed certificate alone does not confirm that the Relay adopted the updated authorization.
 
 Example: `meshline devices renew --days 365 --json`
 

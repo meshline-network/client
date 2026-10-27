@@ -38,7 +38,13 @@ internal static partial class Commands
         },
         new("account migrate", "Move the home route to another registered relay.", ["relay"], [], []),
         new("devices list", "Read current account device state; --out saves the protocol state for recovery.", ["account", "out"], [], []),
-        new("devices renew", "Renew this device and publish the device state.", ["days"], [], []),
+        new("devices renew", "Renew this device and publish the device state.", ["days"], [], [])
+        {
+            OptionDescriptions = new Dictionary<string, string>
+            {
+                ["days"] = "Certificate validity in days (1-720; default 365)."
+            }
+        },
         new("devices remove", "Remove a device authorization.", [], [], ["id"]),
         new("account profile show", "Read network account profile details such as nickname and bio; --account selects another account.", ["account"], [], []),
         new("account profile update", "Update and publish this account's network profile details.", ["nickname", "bio", "avatar-file", "public-discovery"], ["clear-nickname", "clear-bio", "clear-avatar"], []),
@@ -128,9 +134,14 @@ internal static partial class Commands
                 if (i.Get("out") is { } statePath && deviceState is not null) await ProtocolResultAsync(deviceState, statePath, token);
                 result = new { state = deviceState, devices = deviceState?.Certificates.Select(certificate => new { id = certificate.GetDeviceId(client.Context), certificate }) }; break;
             case "devices renew":
-                var renewed = await client.DeviceManager.RenewDeviceAsync(Days(i, "days", 365), token);
-                var published = await client.DeviceManager.PublishDeviceStateAsync(HomeRelay(client), cancellationToken: token);
-                result = new { device = renewed, publication = published }; break;
+                var validity = Days(i, "days", 365, 720);
+                var homeRelay = HomeRelay(client);
+                var renewed = await client.DeviceManager.RenewDeviceAsync(validity, token);
+                var published = await client.DeviceManager.PublishDeviceStateAsync(homeRelay, cancellationToken: token);
+                result = new { device = renewed, publication = published };
+                if (published.Status != DeviceStatePublishStatus.Accepted)
+                    throw new CliException("device_publication_pending", "The device state is staged, not authoritative. Run account establish with background sessions stopped to reconcile publication before renewing again.", Exit.Pending, result);
+                break;
             case "devices remove": await client.DeviceManager.RemoveDeviceAsync(i.Require("id"), token); result = new { removed = i.Require("id") }; break;
             case "account profile show": result = await client.ProfileManager.GetProfileAsync(i.Get("account"), token); break;
             case "account profile update":

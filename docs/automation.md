@@ -53,6 +53,8 @@ Read both the exit code and `error.code`. Some SDK permission failures are expos
 | `RelayMismatch`, `OperationParametersConflict` | 2 | Resume with the saved options; use explicit migration to change the home Relay. |
 | `AccountStateUnavailable` | 5 | Inspect the dependency cause and restore access to verified account state. |
 
+`devices renew` returns `device_publication_pending` (exit 6) if the Relay only stages its state. The result in `error.details` includes the renewed device and publication; reconcile with `account establish` before renewing again.
+
 ## Send outcomes and retries
 
 `messages send` persists a send operation and waits for the selected milestone:

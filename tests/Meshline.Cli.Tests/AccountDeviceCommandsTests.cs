@@ -23,6 +23,8 @@ public sealed class AccountDeviceCommandsTests
     [InlineData("account recover", "certificate-days", "721")]
     [InlineData("account establish", "route-days", "3651")]
     [InlineData("account recover", "route-days", "3651")]
+    [InlineData("devices renew", "days", "721")]
+    [InlineData("devices renew", "days", "0")]
     [InlineData("account establish", "replace-device", "invalid-device")]
     public async Task Invalid_setup_options_fail_before_network_or_device_mutation(string command, string option, string value)
     {
@@ -33,6 +35,17 @@ public sealed class AccountDeviceCommandsTests
         Assert.Equal("invalid_argument", mapped.Code);
         Assert.Equal(Exit.Usage, mapped.ExitCode);
         Assert.Null(fixture.Session.Client.Device);
+    }
+
+    [Fact]
+    public async Task Missing_home_route_does_not_renew_the_device()
+    {
+        await using var fixture = await SessionFixture.OpenAsync();
+        var original = await fixture.Session.Client.DeviceManager.CreateDeviceAsync(TimeSpan.FromDays(7), Token);
+        var missing = await ParseAsync("devices", "renew", "--days", "30");
+        var noRoute = await Assert.ThrowsAsync<CliException>(() => Commands.ExecuteSessionAsync(missing, fixture.Session.Client, new(TextWriter.Null, TextWriter.Null, true), Token));
+        Assert.Equal("account_not_established", noRoute.Code);
+        Assert.Equal(original.ToJson(), fixture.Session.Client.Device!.ToJson());
     }
 
     [Fact]
@@ -103,6 +116,51 @@ public sealed class AccountDeviceCommandsTests
         Assert.Equal(Exit.Credentials, mapped.ExitCode);
         var details = EstablishmentDetails(JsonSerializer.SerializeToElement(CommandResult.Failure(mapped), Json.Options), "LocalKeyAccessRequired");
         Assert.Equal("PermanentlyLost", details.GetProperty("keyIssue").GetString());
+    }
+
+    [Theory]
+    [InlineData(DeviceStatePublishStatus.Accepted)]
+    [InlineData(DeviceStatePublishStatus.Staged)]
+    public async Task Renewal_reports_authoritative_and_pending_publications(DeviceStatePublishStatus status)
+    {
+        await using var fixture = await AccountCommandFixture.OpenAsync();
+        var established = await fixture.RunAsync("account", "establish", "--certificate-days", "7");
+        Assert.True(established.Result.GetProperty("ok").GetBoolean(), established.Result.ToString());
+        var original = fixture.Client.Device!;
+        var originalState = fixture.Relay.State!.ToJson();
+        fixture.Relay.Publications.Clear();
+        fixture.Relay.PublishStatus = status;
+        var (exitCode, result) = await fixture.RunAsync("devices", "renew", "--days", "30");
+        var renewed = fixture.Client.Device!;
+        Assert.Equal(original.GetDeviceId(fixture.Relay.Context), renewed.GetDeviceId(fixture.Relay.Context));
+        Assert.True(renewed.ExpiresAt > original.ExpiresAt);
+        Assert.Equal(30 * 86400, renewed.ExpiresAt - renewed.NotBefore);
+        Assert.Equal(renewed.ToJson(), Assert.Single(Assert.Single(fixture.Relay.Publications).Certificates).ToJson());
+        if (status == DeviceStatePublishStatus.Accepted)
+        {
+            Assert.Equal(Exit.Success, exitCode);
+            Assert.True(result.GetProperty("ok").GetBoolean());
+            Assert.Equal("Accepted", result.GetProperty("data").GetProperty("publication").GetProperty("status").GetString());
+            Assert.Equal(renewed.ToJson(), Assert.Single(fixture.Relay.State!.Certificates).ToJson());
+        }
+        else
+        {
+            Assert.Equal(Exit.Pending, exitCode);
+            Assert.False(result.GetProperty("ok").GetBoolean());
+            var error = result.GetProperty("error");
+            Assert.Equal("device_publication_pending", error.GetProperty("code").GetString());
+            Assert.Contains("account establish", error.GetProperty("message").GetString());
+            var publication = error.GetProperty("details").GetProperty("publication");
+            Assert.Equal("Staged", publication.GetProperty("status").GetString());
+            Assert.True(publication.GetProperty("stagedUntil").GetDateTimeOffset() > DateTimeOffset.UtcNow);
+            Assert.Equal(originalState, fixture.Relay.State!.ToJson());
+            fixture.Relay.PublishStatus = DeviceStatePublishStatus.Accepted;
+            var reconciled = await fixture.RunAsync("account", "establish");
+            Assert.True(reconciled.Result.GetProperty("ok").GetBoolean(), reconciled.Result.ToString());
+            Assert.Equal(Exit.Success, reconciled.ExitCode);
+            Assert.Equal(renewed.ToJson(), fixture.Client.Device!.ToJson());
+            Assert.Equal(renewed.ToJson(), Assert.Single(fixture.Relay.State!.Certificates).ToJson());
+        }
     }
 
     static JsonElement EstablishmentDetails(JsonElement result, string reason)
