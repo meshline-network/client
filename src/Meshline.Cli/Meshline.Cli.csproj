@@ -8,7 +8,7 @@
     <Description>Meshline command-line reference client</Description>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Meshline.Sdk" Version="1.2.0" />
+    <PackageReference Include="Meshline.Sdk" Version="1.6.0" />
     <PackageReference Include="System.CommandLine" Version="2.0.12" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
     <PackageReference Include="Neo" Version="3.10.1" />

@@ -162,6 +162,12 @@ MESHLINE_TRACE=1 meshline daemon start --profile agent --timeout 180
 
 Restart an already running daemon to change its inherited environment. IPC frames are limited to 4 MiB; reduce query limits when a response is too large. See [troubleshooting](troubleshooting.md) for diagnosis without changing account identity.
 
+## Message notifications
+
+The CLI uses SDK 1.6.0. Sending direct messages, group chat messages, contact requests, and contact acceptance automatically requests offline notifications for recipients. Background device/contact maintenance remains silent. Delivery depends on the receiving device's push setup and the Relay; a notification request does not confirm delivery. Message drafts have no notification override.
+
+To receive messages in this CLI, keep a daemon or interactive session running for SDK synchronization and use `watch` to observe events. After exiting, restart and synchronize to catch up. The CLI has no platform push registration or mechanism to wake its process from an offline notification.
+
 ## Backup, restore, and upgrade
 
 1. Stop the daemon or its supervisor and confirm the process has exited. Prevent other commands from opening the profile while copying files.
@@ -170,11 +176,28 @@ Restart an already running daemon to change its inherited environment. IPC frame
 4. Restore the complete set, update storage/credential paths if necessary, and preserve profile identity and network. Do not run two copies of the same device database at once.
 5. For upgrades, verify and extract the new package separately. Preserve customized `config.json`, profiles, and external credentials; do not overwrite them with package defaults. Replace binaries only after shutdown, then start the intended profile and inspect diagnostics.
 
-SDK initialization applies database migrations. A failed upgrade does not automatically roll back the database or guarantee compatibility with an older binary; retain the pre-upgrade backup.
+SDK initialization applies database migrations. The CLI upgrades the SDK from 1.2.0 to 1.6.0, including persisted account-establishment progress and contact device-notification progress. A failed upgrade does not automatically roll back the database or guarantee compatibility with an older binary; retain the pre-upgrade backup.
 
 ## Account authority recovery
 
-A wallet export is an account-key backup, not a complete profile/history backup. To recover an existing identity onto a fresh device, import its wallet into a new profile, then explicitly recover authority while that profile's daemon is stopped:
+A wallet export is an account-key backup, not a complete profile/history backup. Choose the operation according to the state you need to restore, with the profile's background sessions stopped:
+
+| Situation | Command |
+| --- | --- |
+| First setup or ordinary authorization of an imported identity on a new device | `account establish` |
+| Renewal, reauthorization, or resuming interrupted setup | `account establish` |
+| Change an established account's home Relay | `account migrate --relay ID` |
+| Advanced recovery using a previous device state or explicit revisions | `account recover` |
+
+After importing an existing identity into a new profile, authorize its new device with:
+
+```sh
+meshline account establish --profile imported --timeout 180
+```
+
+The SDK resolves existing account state and retains the home Relay. If it requests a device replacement, inspect the verified device list and contact-continuity details before retrying with `--replace-device ID`. See [setup outcomes](automation.md#account-setup-outcomes); unavailable state or an uncertain publication requires reconciliation rather than an automatic switch to recovery.
+
+For advanced recovery with a saved device-state document:
 
 ```sh
 meshline account recover --profile imported --relay "RELAY_ID" --previous-state ./device-state.json --timeout 180

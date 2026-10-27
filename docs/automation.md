@@ -39,6 +39,20 @@ CLI envelopes and SDK client models use camelCase fields. Embedded protocol docu
 
 Read both the exit code and `error.code`. Some SDK permission failures are exposed as generic operation failures; Relay `forbidden` and `unauthorized` responses map to code 8. A failed write must not be assumed to have had no effect.
 
+## Account setup outcomes
+
+`account establish` resumes saved setup after interruption and retains valid device/route state. Stop background sessions first. Errors with `account_establishment_incomplete` preserve the SDK's machine-readable `error.details.reason`, optional `deviceSelection` and `keyIssue`, `contactIssues`, and a structured `cause` when available.
+
+| Reason | Exit | Next step |
+| --- | --- | --- |
+| `SubmissionOutcomeUnknown`, `AuthorizationNotYetEffective` | 6 | Retry `account establish` to reconcile saved publication; do not assume the write failed. |
+| `DeviceSelectionRequired` | 3 | Review `deviceSelection.devices`, then supply an explicitly chosen `--replace-device ID`. |
+| `ContactContinuityUnverifiable`, `StateConflict` | 3 | Inspect the returned details and restore the required authorization evidence before retrying. |
+| `LocalKeyAccessRequired` | 4 | Resolve `keyIssue` without replacing the profile or device keys. |
+| `AccountSignerRequired`, `SignatureDeclined` | 8 | Restore account-signing access or obtain authorization. |
+| `RelayMismatch`, `OperationParametersConflict` | 2 | Resume with the saved options; use explicit migration to change the home Relay. |
+| `AccountStateUnavailable` | 5 | Inspect the dependency cause and restore access to verified account state. |
+
 ## Send outcomes and retries
 
 `messages send` persists a send operation and waits for the selected milestone:

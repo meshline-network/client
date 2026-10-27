@@ -2,7 +2,7 @@
 
 [Documentation home](../README.md#documentation) · [Current limitations](troubleshooting.md#known-limitations)
 
-The repository currently contains the Meshline CLI and leaves room for other clients. The CLI targets .NET 10 and consumes published Meshline.Sdk 1.2.0 APIs. It uses the SDK's state, storage, synchronization, and cryptographic protocol implementation instead of modifying or vendoring the SDK.
+The repository currently contains the Meshline CLI and leaves room for other clients. The CLI targets .NET 10 and consumes published Meshline.Sdk 1.6.0 APIs. It uses the SDK's state, storage, synchronization, and cryptographic protocol implementation instead of modifying or vendoring the SDK.
 
 ## Source layout
 
@@ -115,9 +115,13 @@ Both workflows have completed successfully on GitHub; inspect the [CI runs](http
 | Application preferences and account state have different lifecycles | Ship application configuration, create identity/profile together, and preserve the SDK's persistence ownership. |
 | Account authority, contact synchronization, and message readability recover separately | Report the actual stage/result instead of declaring complete history restoration. |
 
-The CLI keeps its own command/IPC deadline and JSON result policy. SDK 1.2.0 owns history-range validation, cumulative read-position updates, send-status retention/waiting, and synchronization gates. `groups sync` refreshes the home account timeline before the group to obtain recovery material. One-shot synchronization does not start background workers; daemon commands still serialize it with other network operations. Runtime synchronization exceptions are converted to structured errors before JSON serialization.
+The CLI keeps its own command/IPC deadline and JSON result policy. The SDK owns history-range validation, cumulative read-position updates, send-status retention/waiting, and synchronization gates. `groups sync` refreshes the home account timeline before the group to obtain recovery material. One-shot synchronization does not start background workers; daemon commands still serialize it with other network operations. Runtime synchronization exceptions are converted to structured errors before JSON serialization.
 
-CLI error mapping separates its own elapsed deadline (`operation_timeout`), an SDK-owned or dependency timeout (`request_timeout`), and unexpected dependency cancellation (`dependency_canceled`). SDK 1.2.0 supplies `operation` and `timeoutSeconds` on its `TimeoutException`; the CLI forwards that context. Integration tests exercise the published package with a canceled HTTP fixture, real local history/read-position operations, and retained send outcomes. Test-only SQLite fixtures seed isolated projections; production code does not access SDK tables directly.
+CLI error mapping separates its own elapsed deadline (`operation_timeout`), an SDK-owned or dependency timeout (`request_timeout`), and unexpected dependency cancellation (`dependency_canceled`). The SDK supplies `operation` and `timeoutSeconds` on its `TimeoutException`; the CLI forwards that context. Account-establishment exceptions retain their reason, selection/key/contact details, and structured dependency cause. Unknown or staged authorization stays pending. Integration tests exercise the published package with a canceled HTTP fixture, real local history/read-position operations, and retained send outcomes. Test-only SQLite fixtures seed isolated projections; production code does not access SDK tables directly.
+
+`AccountDeviceCommandsTests` runs the shared parser and command handlers against the published SDK with a local signed HTTP Relay fixture. It covers invalid setup arguments, real device-selection/key-access/contact-continuity details, and forwarding a selected replacement device. The fixture does not contact an external Relay. Shared runtime-session and account-command fixtures live under `tests/Meshline.Cli.Tests/Support`.
+
+`DatabaseUpgradeTests` opens an SDK 1.2 database through normal runtime initialization and checks account binding, protected device keys, certificate and own device state, contacts and their notification checkpoint, and message history after migration and reopening. Signing and shared-secret derivation verify that the retained keys remain usable. Notification intent is set by SDK 1.6.0 for chat and contact operations; the CLI does not add draft fields or notification switches. Runtime session initialization continues to apply SDK migrations to the existing database.
 
 ## Maintaining documentation
 

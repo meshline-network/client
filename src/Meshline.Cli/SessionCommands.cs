@@ -19,8 +19,23 @@ internal static partial class Commands
         new("relays list", "Discover registered relays through the configured RPC.", [], [], []),
         new("status", "Show local SDK state and synchronization progress for one resource.", ["relay", "group", "channel"], [], []),
         new("account sync", "Await a fresh account timeline synchronization pass on one relay.", ["relay"], [], []),
-        new("account establish", "Establish this identity and device on a relay.", ["relay", "certificate-days", "route-days"], [], []),
-        new("account recover", "Explicitly recover account authority on a new device.", ["relay", "previous-state", "device-state-revision", "route-revision", "certificate-days", "route-days"], [], []),
+        new("account establish", "Establish or resume this identity and device on a relay.", ["relay", "certificate-days", "route-days", "replace-device"], [], [])
+        {
+            OptionDescriptions = new Dictionary<string, string>
+            {
+                ["replace-device"] = "Explicit device ID to replace when authorizing this device; inspect the SDK device selection first.",
+                ["certificate-days"] = "Certificate validity in days (1-720; default 365).",
+                ["route-days"] = "Route validity in days (1-3650; default 365)."
+            }
+        },
+        new("account recover", "Advanced authority recovery with previous state or explicit revisions.", ["relay", "previous-state", "device-state-revision", "route-revision", "certificate-days", "route-days"], [], [])
+        {
+            OptionDescriptions = new Dictionary<string, string>
+            {
+                ["certificate-days"] = "Certificate validity in days (1-720; default 365).",
+                ["route-days"] = "Route validity in days (1-3650; default 365)."
+            }
+        },
         new("account migrate", "Move the home route to another registered relay.", ["relay"], [], []),
         new("devices list", "Read current account device state; --out saves the protocol state for recovery.", ["account", "out"], [], []),
         new("devices renew", "Renew this device and publish the device state.", ["days"], [], []),
@@ -87,13 +102,19 @@ internal static partial class Commands
             case "status": result = await StatusAsync(client, i, token); break;
             case "account sync": return await SyncResultAsync("account", await messages.SynchronizeAsync(i.Get("relay") ?? HomeRelay(client), token), output);
             case "account establish":
-                await client.EstablishAccountAsync(new() { RelayId = i.Get("relay"), CertificateValidity = Days(i, "certificate-days", 365), RouteValidity = Days(i, "route-days", 365) }, token);
+                await client.EstablishAccountAsync(new()
+                {
+                    RelayId = i.Get("relay"),
+                    CertificateValidity = Days(i, "certificate-days", 365, 720),
+                    RouteValidity = Days(i, "route-days", 365),
+                    ReplaceDeviceId = i.Get("replace-device")
+                }, token);
                 result = await StatusAsync(client, null, token); break;
             case "account recover":
                 await client.RecoverAccountAsync(new()
                 {
                     RelayId = i.Get("relay"),
-                    CertificateValidity = Days(i, "certificate-days", 365),
+                    CertificateValidity = Days(i, "certificate-days", 365, 720),
                     RouteValidity = Days(i, "route-days", 365),
                     PreviousDeviceState = i.Get("previous-state") is { } stateFile ? await ReadProtocolAsync<AccountDeviceState>(stateFile, token) : null,
                     DeviceStateRevision = OptionalLong(i, "device-state-revision"),
@@ -180,7 +201,7 @@ internal static partial class Commands
         return number;
     }
     static long? OptionalLong(Invocation i, string key) => i.Get(key) is { } value ? long.Parse(value, CultureInfo.InvariantCulture) : null;
-    static TimeSpan Days(Invocation i, string key, int fallback) => TimeSpan.FromDays(ParseBoundedInt(i.Get(key), fallback, 1, 3650));
+    static TimeSpan Days(Invocation i, string key, int fallback, int maximum = 3650) => TimeSpan.FromDays(ParseBoundedInt(i.Get(key), fallback, 1, maximum));
     static T EnumValue<T>(Invocation i, string key, T fallback) where T : struct, Enum => i.Get(key) is { } value && Enum.TryParse<T>(value, true, out var parsed) && Enum.IsDefined(parsed) ? parsed
         : i.Get(key) is null ? fallback : throw new CliException("invalid_argument", $"Invalid --{key} value.", Exit.Usage);
     static DateTimeOffset Expiry(Invocation i) => i.Get("expires") is { } expires ? DateTimeOffset.Parse(expires, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal) : DateTimeOffset.UtcNow.AddDays(1);

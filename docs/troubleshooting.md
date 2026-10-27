@@ -72,7 +72,7 @@ If `watch_overflow` occurs or the event stream disconnects, query current state 
 
 ## Recovery and missing history
 
-Importing a wallet creates a new local profile/device; `account recover` explicitly restores network authority. Neither recreates deleted SQLite history. A device can recover authority while still lacking local contact grants or group keys. Existing authorized devices may need to synchronize contact state, and group recovery may require approval.
+Importing a wallet creates a new local profile. Use `account establish` to authorize its device, or to renew or reauthorize an existing device; stop background sessions first and resolve any returned [setup outcome](automation.md#account-setup-outcomes). `account recover` is the advanced path for a previous device state or explicit revisions; see [account authority recovery](operations.md#account-authority-recovery). Neither command recreates deleted SQLite history. A device can recover authority while still lacking local contact grants or group keys. Existing authorized devices may need to synchronize contact state, and group recovery may require approval.
 
 Previously unreadable messages are not guaranteed to become readable retroactively after later synchronization. Inspect actual message content/state rather than treating account recovery success as complete data restoration. A complete offline backup offers a different recovery path from a wallet alone.
 

@@ -1,3 +1,4 @@
+using Meshline.Models.Client;
 using System.CommandLine;
 using System.CommandLine.Invocation;
 using System.Runtime.InteropServices;
@@ -85,6 +86,7 @@ internal static class CliApplication
     internal static CliException MapError(Exception error) => error switch
     {
         CliException known => known,
+        AccountEstablishmentException setup => MapEstablishmentError(setup),
         Meshline.Transport.RelayException relay => new("relay_" + relay.Error.Code, relay.Error.Message,
             relay.Error.Code is "unauthorized" or "forbidden" ? Exit.Permission : Exit.Network, relay.Error.Data),
         TimeoutException timeout => new("request_timeout", timeout.Message + " A submitted write may still complete; inspect its status before retrying.", Exit.Pending,
@@ -98,4 +100,22 @@ internal static class CliApplication
         IOException => new("storage_error", error.Message, Exit.Configuration),
         _ => new("operation_failed", error.Message)
     };
+
+    static CliException MapEstablishmentError(AccountEstablishmentException setup)
+    {
+        var exitCode = setup.Reason switch
+        {
+            AccountEstablishmentReason.SubmissionOutcomeUnknown or AccountEstablishmentReason.AuthorizationNotYetEffective => Exit.Pending,
+            AccountEstablishmentReason.AccountStateUnavailable => Exit.Network,
+            AccountEstablishmentReason.AccountSignerRequired or AccountEstablishmentReason.SignatureDeclined => Exit.Permission,
+            AccountEstablishmentReason.LocalKeyAccessRequired => Exit.Credentials,
+            AccountEstablishmentReason.RelayMismatch or AccountEstablishmentReason.OperationParametersConflict => Exit.Usage,
+            _ => Exit.Configuration
+        };
+        return new("account_establishment_incomplete", setup.Message, exitCode, new
+        {
+            setup.Reason, setup.DeviceSelection, setup.KeyIssue, setup.ContactIssues,
+            cause = setup.InnerException is { } cause ? ErrorInfo.From(MapError(cause)) : null
+        });
+    }
 }

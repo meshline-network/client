@@ -8,7 +8,7 @@ The CLI manages accounts, devices, contacts, encrypted direct and group messages
 
 `meshline interactive --profile agent --json` keeps a profile connected in one foreground process and accepts commands through stdin, without daemon IPC. See [interactive sessions](docs/operations.md#interactive-sessions).
 
-The client is a **development preview**. It uses the published .NET SDK for synchronization, conversation state, message history, read positions, and retained send outcomes.
+The client is a **development preview**. It uses published Meshline.Sdk 1.6.0 for synchronization, conversation state, message history, read positions, and retained send outcomes. Account setup is resumable, and chat/contact notifications for recipients are requested automatically by the SDK.
 
 ## Installation
 

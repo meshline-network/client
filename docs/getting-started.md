@@ -78,7 +78,7 @@ To select one account from an existing NEP-6 wallet, use a new profile name:
 meshline account import --profile imported --wallet ./wallet.json --account-index 0 --network neo:860833102:0x5979ba79431672a38a18a32cdc48fd7317818b70 --rpc https://n3seed1.ngd.network:10332 --protection file --key-file ./secrets/imported.key --generate-key
 ```
 
-The wallet password is prompted without echo. Automation can supply `--password-file` pointing to an access-restricted file. Only the selected account is imported; the source wallet is unchanged. For an identity already established on the network, follow [account recovery](operations.md#account-authority-recovery) instead of treating `establish` as implicit recovery.
+The wallet password is prompted without echo. Automation can supply `--password-file` pointing to an access-restricted file. Only the selected account is imported; the source wallet is unchanged. For an identity already established on the network, run `meshline account establish --profile imported --timeout 180` with the profile's background sessions stopped. This authorizes the new device using the existing account state and home Relay. If device selection or other evidence is needed, inspect the returned [setup outcome](automation.md#account-setup-outcomes). Use [advanced recovery](operations.md#account-authority-recovery) when supplying a previous device state or explicit revisions.
 
 ## Select a Relay and connect
 

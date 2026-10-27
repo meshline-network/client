@@ -138,9 +138,11 @@ Example: `meshline account sync --json`
 
 ### account establish
 
-Usage: `meshline account establish [--relay ID] [--certificate-days N] [--route-days N]`
+Usage: `meshline account establish [--relay ID] [--certificate-days N] [--route-days N] [--replace-device ID]`
 
-Establishes this identity/device and account route on a Relay; stop any daemon for this profile first. `--relay` chooses a Relay; omission delegates selection to the SDK. Both validity options default to 365 days and accept 1–3650. Returns the SDK status after establishment. This command does not implicitly recover an existing account onto a replacement device.
+Establishes or resumes this identity/device and account route on a Relay; stop background sessions for this profile first. Use it for first setup, ordinary authorization of an imported identity on a new device, and renewal or reauthorization of an existing device. Other authorized devices and usable routes are retained. `--relay` selects the initial Relay; an existing route or unfinished setup retains its Relay, and a conflicting explicit value is rejected. Use `account migrate` to change it. Both validity options default to 365 days: certificates accept 1–720 and routes accept 1–3650. Interrupted setup retains its saved options and can be resumed by repeating this command with omitted options. Returns SDK status only after account setup completes.
+
+If setup requires a device replacement, `account_establishment_incomplete` includes `error.details.reason` and the verified `deviceSelection`. Review those devices, then pass the selected ID through `--replace-device`; the SDK checks contact-authorization continuity before removal. Omission preserves other devices or resumes a previously saved replacement choice. See [setup outcomes](automation.md#account-setup-outcomes). Advanced recovery with a previous device state or explicit revisions uses `account recover`.
 
 Example: `meshline account establish --relay "RELAY_ID" --timeout 180`
 
@@ -148,7 +150,7 @@ Example: `meshline account establish --relay "RELAY_ID" --timeout 180`
 
 Usage: `meshline account recover [--relay ID] [--previous-state PATH] [--device-state-revision N] [--route-revision N] [--certificate-days N] [--route-days N]`
 
-Explicitly restores account authority on a device, using the imported account signing key. Stop the daemon first. `--previous-state` reads a protocol device-state document exported by `devices list --out`; revision options supply explicit integer revisions when needed. Otherwise the SDK resolves available state. Validity options default to 365 days, range 1–3650; optional `--relay` selects the recovery Relay. Returns SDK status, not proof that contacts, keys, or history have fully recovered. See [recovery](operations.md#account-authority-recovery).
+Advanced account-authority recovery using the account signing key. Use `account establish` for ordinary new-device authorization, renewal, or reauthorization. Stop background sessions first. `--previous-state` reads a protocol device-state document exported by `devices list --out`; revision options supply explicit integer revisions when needed. Otherwise the SDK resolves available state. Validity options default to 365 days: certificates accept 1–720 and routes accept 1–3650; optional `--relay` selects the recovery Relay. Returns SDK status, not proof that contacts, keys, or history have fully recovered. See [recovery](operations.md#account-authority-recovery).
 
 Example: `meshline account recover --profile imported --relay "RELAY_ID" --previous-state ./device-state.json --timeout 180`
 
@@ -244,6 +246,8 @@ Usage: `meshline contacts add (--account ID | --invite-file PATH) [--note TEXT]`
 
 Supply exactly one account ID or saved protocol invitation. Optional `--note` accompanies the request. Returns the SDK contact-request result. Requesting access does not itself mean the other participant accepted it.
 
+The SDK automatically requests an offline notification for the contact request.
+
 Example: `meshline contacts add --invite-file ./invite.json --note "Hello"`
 
 ### contacts requests
@@ -259,6 +263,8 @@ Example: `meshline contacts requests --direction Incoming --json`
 Usage: `meshline contacts accept ACCOUNT`
 
 Accepts an incoming request from the required account ID and returns the SDK contact result. The request must be available and valid for this account.
+
+The SDK automatically requests an offline notification for contact acceptance.
 
 Example: `meshline contacts accept "ACCOUNT_ID"`
 
@@ -345,6 +351,8 @@ Example: `meshline conversations mark-read "CONVERSATION_ID" --json`
 Usage: `meshline messages send --to ACCOUNT (--text TEXT | --draft-file PATH) [--wait queued|relay|target]`
 
 Requires the recipient account ID and exactly one content source. The peer must have usable contact authorization. `--wait` defaults to `relay`. Returns `{status,waitedFor}`; see [send outcomes](automation.md#send-outcomes-and-retries) before interpreting success or retrying. A draft uses the direct-message shape below. Sending does not mark a conversation read.
+
+The SDK automatically requests an offline notification; there is no draft field or CLI switch to override it. Relay/target acceptance does not confirm push delivery.
 
 Example: `meshline messages send --to "ACCOUNT_ID" --text "Hello" --wait target --json`
 
@@ -469,6 +477,8 @@ Example: `meshline groups close "GROUP_ID"`
 Usage: `meshline groups send ID [--relay ID] (--text TEXT | --draft-file PATH)`
 
 Requires group membership, usable group keys, and exactly one content source. Uses the group draft shape, including optional `replyToSequence`. Returns the SDK group-message result. There is no direct-message-style `--wait` option, and success does not mean all members have read it.
+
+The SDK automatically requests an offline notification for group chat messages. There is no draft field or CLI switch to override it, and send success does not confirm push delivery.
 
 Example: `meshline groups send "GROUP_ID" --text "Hello team"`
 
