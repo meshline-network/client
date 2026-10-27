@@ -176,7 +176,7 @@ To receive messages in this CLI, keep a daemon or interactive session running fo
 4. Restore the complete set, update storage/credential paths if necessary, and preserve profile identity and network. Do not run two copies of the same device database at once.
 5. For upgrades, verify and extract the new package separately. Preserve customized `config.json`, profiles, and external credentials; do not overwrite them with package defaults. Replace binaries only after shutdown, then start the intended profile and inspect diagnostics.
 
-SDK initialization applies database migrations. The CLI upgrades the SDK from 1.2.0 to 1.6.0, including persisted account-establishment progress and contact device-notification progress. A failed upgrade does not automatically roll back the database or guarantee compatibility with an older binary; retain the pre-upgrade backup.
+SDK initialization applies database migrations. CLI 0.3.0 upgrades the SDK from 1.2.0 to 1.6.0, including persisted account-establishment progress and contact device-notification progress. A failed upgrade does not automatically roll back the database or guarantee compatibility with an older binary; retain the pre-upgrade backup.
 
 ## Account authority recovery
 
