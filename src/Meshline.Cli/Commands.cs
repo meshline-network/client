@@ -95,7 +95,7 @@ internal static partial class Commands
                 await output.ResultAsync(CommandResult.Success(new { items }));
                 return Exit.Success;
             default:
-                return await ExecuteSessionAsync(invocation, session, output, token);
+                return await ExecuteSessionAsync(invocation, session.Client, output, token);
         }
     }
 

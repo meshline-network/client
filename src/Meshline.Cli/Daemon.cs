@@ -207,11 +207,11 @@ internal static class Daemon
                 }
                 else if (i.Command is "account establish" or "account recover") throw new CliException("stop_daemon_required", "Stop the daemon before establishing or recovering an account.", Exit.Busy);
                 else if (!Commands.Catalog.Any(s => s.Path == i.Command) || i.Command.StartsWith("daemon ", StringComparison.Ordinal)) throw new CliException("ipc_command", "Unsupported daemon command.", Exit.Usage);
-                else if (i.Command == "watch" || !Commands.NeedsBackground(i.Command) && i.Command is not ("account sync" or "groups sync" or "channels sync")) exitCode = await Commands.ExecuteSessionAsync(i, session, output, operation.Token);
+                else if (i.Command == "watch" || !Commands.NeedsBackground(i.Command) && i.Command is not ("account sync" or "groups sync" or "channels sync")) exitCode = await Commands.ExecuteSessionAsync(i, session.Client, output, operation.Token);
                 else
                 {
                     await commandGate.WaitAsync(operation.Token);
-                    try { exitCode = await Commands.ExecuteSessionAsync(i, session, output, operation.Token); }
+                    try { exitCode = await Commands.ExecuteSessionAsync(i, session.Client, output, operation.Token); }
                     finally { commandGate.Release(); }
                 }
                 await Ipc.WriteAsync(stream, new IpcResponse("exit", ExitCode: exitCode), canceled.Token);

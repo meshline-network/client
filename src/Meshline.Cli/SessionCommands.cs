@@ -65,7 +65,7 @@ internal static partial class Commands
         await using var session = await RuntimeSession.OpenAsync(context, output, token);
         if (NeedsBackground(invocation.Command))
             await session.Client.StartAsync(token);
-        return await ExecuteSessionAsync(invocation, session, output, token);
+        return await ExecuteSessionAsync(invocation, session.Client, output, token);
     }
 
     internal static bool NeedsBackground(string command) => command is not (
@@ -74,11 +74,10 @@ internal static partial class Commands
         or "messages list" or "messages show" or "messages outbox" or "messages status" or "messages cancel"
         or "groups list" or "groups messages" or "groups members list" or "groups bans list" or "channels list" or "channels posts");
 
-    internal static async Task<int> ExecuteSessionAsync(Invocation i, RuntimeSession session, Output output, CancellationToken token)
+    internal static async Task<int> ExecuteSessionAsync(Invocation i, MeshlineClient client, Output output, CancellationToken token)
     {
         // Validate before any SDK query acquires a snapshot that needs disposal.
         if (i.Get("limit") is not null) _ = Limit(i);
-        var client = session.Client;
         if (i.Command.StartsWith("groups ", StringComparison.Ordinal)) return await ExecuteGroupAsync(i, client, output, token);
         if (i.Command.StartsWith("channels ", StringComparison.Ordinal)) return await ExecuteChannelAsync(i, client, output, token);
         var messages = client.MessageManager;

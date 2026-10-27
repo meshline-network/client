@@ -34,11 +34,14 @@ internal sealed class CliException(string code, string message, int exitCode = E
     public object? Details { get; } = details;
 }
 
-internal sealed record ErrorInfo(string Code, string Message, object? Details = null);
+internal sealed record ErrorInfo(string Code, string Message, object? Details = null)
+{
+    public static ErrorInfo From(CliException error) => new(error.Code, error.Message, error.Details);
+}
 internal sealed record CommandResult(int SchemaVersion, bool Ok, object? Data, ErrorInfo? Error)
 {
     public static CommandResult Success(object? data) => new(1, true, data, null);
-    public static CommandResult Failure(CliException error) => new(1, false, null, new(error.Code, error.Message, error.Details));
+    public static CommandResult Failure(CliException error) => new(1, false, null, ErrorInfo.From(error));
 }
 
 internal sealed class Output(TextWriter stdout, TextWriter stderr, bool json)

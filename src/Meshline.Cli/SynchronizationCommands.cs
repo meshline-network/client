@@ -38,7 +38,7 @@ internal static partial class Commands
             status.State,
             status.LastSynchronizedAt,
             status.BlockReason,
-            error = error is null ? null : new ErrorInfo(error.Code, error.Message, error.Details),
+            error = error is null ? null : ErrorInfo.From(error),
             status.HasRetentionGap
         };
     }

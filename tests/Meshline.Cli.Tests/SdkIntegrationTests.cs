@@ -13,53 +13,6 @@ public sealed class SdkIntegrationTests
     const string Group = "grp_AAAAAAAAAAAAAAAAAAAAAA";
     const string Channel = "chan_AAAAAAAAAAAAAAAAAAAAAA";
 
-    sealed class SessionFixture : IAsyncDisposable
-    {
-        public TemporaryProfile Profile { get; } = new();
-        public RuntimeSession Session { get; private set; } = null!;
-
-        public static async Task<SessionFixture> OpenAsync()
-        {
-            var fixture = new SessionFixture();
-            try
-            {
-                var context = fixture.Profile.Context;
-                await Secrets.GenerateKeyFileAsync(context.Settings.Protection.KeyFile!, Token);
-                context.Settings.ProtectedKey = await Secrets.CreateAsync(context, Token);
-                using (var vault = await Secrets.OpenAsync(context, Token)) await Identity.CreateAsync(context, vault, Token);
-                await Configuration.SaveProfileAsync(context, true, Token);
-                fixture.Session = await RuntimeSession.OpenAsync(context, new(TextWriter.Null, TextWriter.Null, true), Token);
-                return fixture;
-            }
-            catch { fixture.Profile.Dispose(); throw; }
-        }
-
-        // Only test fixtures seed SDK projections. Production code always uses SDK APIs.
-        public async Task SeedAsync(string sql, params (string Name, object Value)[] parameters)
-        {
-            await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Profile.Context.DatabasePath, Pooling = false }.ToString());
-            await connection.OpenAsync(Token);
-            await using var command = connection.CreateCommand();
-            command.CommandText = sql;
-            foreach (var (name, value) in parameters) command.Parameters.AddWithValue(name, value);
-            await command.ExecuteNonQueryAsync(Token);
-        }
-
-        public async Task<JsonElement> RunAsync(string command, params (string Name, string Value)[] values)
-        {
-            var invocation = new Invocation(command, values.ToDictionary(pair => pair.Name, pair => pair.Value), Profile.Context.ConfigPath, Profile.Context.Name, true, 60);
-            using var stdout = new StringWriter();
-            Assert.Equal(Exit.Success, await Commands.ExecuteSessionAsync(invocation, Session, new(stdout, TextWriter.Null, true), Token));
-            return JsonSerializer.Deserialize<JsonElement>(stdout.ToString()).GetProperty("data");
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            try { await Session.DisposeAsync(); }
-            finally { Profile.Dispose(); }
-        }
-    }
-
     static async Task AddDirectAsync(SessionFixture fixture, string sender, long sequence)
         => await fixture.SeedAsync("""
             INSERT INTO Messages (LocalSequence, Sender, MessageId, SenderDeviceId, Recipient, CreatedAt, PayloadType, PayloadJson, IsDirect)
