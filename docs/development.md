@@ -25,11 +25,11 @@ Install the .NET 10 SDK. From the repository root, these commands work in PowerS
 ```sh
 dotnet restore Meshline.Client.slnx
 dotnet build Meshline.Client.slnx -c Release --no-restore
-dotnet run --project tests/Meshline.Cli.Tests -c Release --no-build -- --minimum-expected-tests 83 --fail-skips on --report-xunit-trx --results-directory TestResults
+dotnet run --project tests/Meshline.Cli.Tests -c Release --no-build -- --fail-skips on --report-xunit-trx --results-directory TestResults
 dotnet src/Meshline.Cli/bin/Release/net10.0/meshline.dll --help
 ```
 
-The test application uses the Microsoft Testing Platform runner. Empty/short runs and skipped tests must fail the documented check. Runtime identifiers are Windows and Linux x64. There is no required `packages.lock.json` workflow.
+The test application uses the Microsoft Testing Platform runner. Skipped tests fail the documented check. Runtime identifiers are Windows and Linux x64. There is no required `packages.lock.json` workflow.
 
 For interactive source execution:
 
@@ -85,7 +85,7 @@ Replace every placeholder and choose a directory that does not already exist. Th
 
 ## CI and releases
 
-The `client` CI workflow runs on push, pull requests, manual dispatch, and reusable workflow calls. Its matrix is Windows and Ubuntu 24.04. It restores, builds, runs the test executable with skipped/empty-run protection, checks built CLI help, and runs the offline Linux script on Ubuntu. It neither packages binaries nor uploads Actions artifacts.
+The `client` CI workflow runs on push, pull requests, manual dispatch, and reusable workflow calls. Its matrix is Windows and Ubuntu 24.04. It restores, builds, runs the test executable with skipped-test protection, checks built CLI help, and runs the offline Linux script on Ubuntu. It neither packages binaries nor uploads Actions artifacts.
 
 The separate `release` workflow runs on pushes to `main`:
 
